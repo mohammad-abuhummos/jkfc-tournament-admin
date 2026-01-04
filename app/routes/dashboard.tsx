@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link, Outlet } from "react-router";
 
 import type { Route } from "./+types/dashboard";
 import { RequireAuth, useAuth } from "~/auth/auth";
@@ -7,15 +8,15 @@ export function meta({}: Route.MetaArgs) {
   return [{ title: "Dashboard | JKFC Admin" }];
 }
 
-export default function Dashboard() {
+export default function DashboardLayout() {
   return (
     <RequireAuth>
-      <DashboardContent />
+      <DashboardShell />
     </RequireAuth>
   );
 }
 
-function DashboardContent() {
+function DashboardShell() {
   const { user, signOut } = useAuth();
   const [signingOut, setSigningOut] = React.useState(false);
 
@@ -31,31 +32,29 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between p-4">
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-600">
-              {user?.email ?? user?.uid}
-            </p>
-          </div>
+        <div className="mx-auto flex max-w-6xl items-center justify-between p-4">
+          <Link to="/dashboard" className="font-semibold text-gray-900">
+            JKFC Admin
+          </Link>
 
-          <button
-            type="button"
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
-            onClick={handleSignOut}
-            disabled={signingOut}
-          >
-            {signingOut ? "Signing out..." : "Sign out"}
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline text-sm text-gray-600">
+              {user?.email ?? user?.uid}
+            </span>
+            <button
+              type="button"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? "Signing out..." : "Sign out"}
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl p-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6">
-          <p className="text-gray-700">
-            You&apos;re logged in. Build your admin tools here.
-          </p>
-        </div>
+      <main className="mx-auto max-w-6xl p-4">
+        <Outlet />
       </main>
     </div>
   );
