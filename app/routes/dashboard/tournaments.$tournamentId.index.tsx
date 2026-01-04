@@ -252,11 +252,12 @@ export default function TournamentOverview() {
 
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h2 className="text-lg font-semibold text-gray-900">Quick actions</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <QuickLink to={`${base}/teams`} label="Teams" />
           <QuickLink to={`${base}/groups`} label="Groups" />
           <QuickLink to={`${base}/matches`} label="Matches" />
           <QuickLink to={`${base}/bracket`} label="Bracket" />
+          <QuickLink to={`${base}/event`} label="Event" />
           <QuickLink to={`${base}/settings`} label="Settings" />
         </div>
       </div>

@@ -11,6 +11,7 @@ export default [
       route("groups", "routes/dashboard/tournaments.$tournamentId.groups.tsx"),
       route("matches", "routes/dashboard/tournaments.$tournamentId.matches.tsx"),
       route("bracket", "routes/dashboard/tournaments.$tournamentId.bracket.tsx"),
+      route("event", "routes/dashboard/tournaments.$tournamentId.event.tsx"),
       route("settings", "routes/dashboard/tournaments.$tournamentId.settings.tsx"),
     ]),
   ]),
