@@ -11,7 +11,7 @@ import { setBracketMatchResult, generateSingleEliminationBracket } from "~/featu
 import { useTournamentManager } from "~/features/tournaments/context";
 import type { BracketState, Team } from "~/features/tournaments/types";
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ }: Route.MetaArgs) {
   return [{ title: "Bracket | JKFC Admin" }];
 }
 
@@ -129,8 +129,7 @@ export default function TournamentBracketAdmin() {
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h1 className="text-xl font-semibold text-gray-900">Bracket</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Manage knockout bracket state (stored in Firestore). Your frontend can
-          read and render this later.
+          Manage knockout bracket.
         </p>
 
         {error ? (

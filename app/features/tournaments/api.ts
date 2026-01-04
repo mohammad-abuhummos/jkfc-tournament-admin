@@ -10,6 +10,9 @@ import type {
 
 type Unsubscribe = () => void;
 
+export const DEFAULT_TEAM_LOGO_URL =
+  "https://firebasestorage.googleapis.com/v0/b/jkfc-tournment.firebasestorage.app/o/tournaments%2FkB3FwCiGTcGHLY2U93Md%2Fteams%2Fdef%2Fdef-1.svg?alt=media&token=f94c56f9-7ded-40b1-bc48-c5caa6112367";
+
 function mapDoc<T>(docSnap: { id: string; data: () => unknown }): T {
   return { id: docSnap.id, ...(docSnap.data() as object) } as T;
 }
@@ -181,7 +184,7 @@ export async function createTournamentTeam(input: {
     nameEn: input.nameEn,
     nameAr: input.nameAr,
     description: input.description || "",
-    logoUrl: "",
+    logoUrl: input.logoFile ? "" : DEFAULT_TEAM_LOGO_URL,
     logoPath: "",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -208,6 +211,83 @@ export async function createTournamentTeam(input: {
   }
 
   return teamRef.id;
+}
+
+export async function updateTournamentTeam(input: {
+  tournamentId: string;
+  teamId: string;
+  nameEn: string;
+  nameAr: string;
+  description?: string;
+  logoFile?: File | null;
+  previousLogoPath?: string | null;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { doc, serverTimestamp, updateDoc } = await import("firebase/firestore");
+
+  const teamDocRef = doc(firestore, "tournaments", input.tournamentId, "teams", input.teamId);
+
+  await updateDoc(teamDocRef, {
+    nameEn: input.nameEn,
+    nameAr: input.nameAr,
+    description: input.description || "",
+    updatedAt: serverTimestamp(),
+  });
+
+  if (input.logoFile) {
+    const storage = await getStorageClient();
+    const { deleteObject, getDownloadURL, ref, uploadBytes } = await import(
+      "firebase/storage"
+    );
+
+    const ext = getFileExtension(input.logoFile.name);
+    const logoPath = `tournaments/${input.tournamentId}/teams/${input.teamId}/logo${
+      ext ? `.${ext}` : ""
+    }`;
+    const storageRef = ref(storage, logoPath);
+
+    await uploadBytes(storageRef, input.logoFile);
+    const logoUrl = await getDownloadURL(storageRef);
+
+    await updateDoc(teamDocRef, {
+      logoUrl,
+      logoPath,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Best-effort cleanup of previous logo file.
+    if (input.previousLogoPath && input.previousLogoPath !== logoPath) {
+      try {
+        await deleteObject(ref(storage, input.previousLogoPath));
+      } catch (err) {
+        // ignore (missing permission, file already deleted, etc.)
+        console.warn("[updateTournamentTeam] Failed to delete old logo", err);
+      }
+    }
+  }
+}
+
+export async function deleteTournamentTeam(input: {
+  tournamentId: string;
+  teamId: string;
+  logoPath?: string | null;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { deleteDoc, doc } = await import("firebase/firestore");
+
+  await deleteDoc(doc(firestore, "tournaments", input.tournamentId, "teams", input.teamId));
+
+  // Best-effort cleanup of logo file.
+  if (input.logoPath) {
+    try {
+      const storage = await getStorageClient();
+      const { deleteObject, ref } = await import("firebase/storage");
+      await deleteObject(ref(storage, input.logoPath));
+    } catch (err) {
+      // ignore (missing permission, file already deleted, etc.)
+      console.warn("[deleteTournamentTeam] Failed to delete logo", err);
+    }
+  }
 }
 
 export async function subscribeToTournamentGroups(
@@ -256,6 +336,32 @@ export async function createTournamentGroup(input: {
   );
 
   return ref.id;
+}
+
+export async function updateTournamentGroup(input: {
+  tournamentId: string;
+  groupId: string;
+  name: string;
+  order: number;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { doc, serverTimestamp, updateDoc } = await import("firebase/firestore");
+
+  await updateDoc(doc(firestore, "tournaments", input.tournamentId, "groups", input.groupId), {
+    name: input.name,
+    order: input.order,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteTournamentGroup(input: {
+  tournamentId: string;
+  groupId: string;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { deleteDoc, doc } = await import("firebase/firestore");
+
+  await deleteDoc(doc(firestore, "tournaments", input.tournamentId, "groups", input.groupId));
 }
 
 export async function addTeamToGroup(input: {
@@ -344,6 +450,61 @@ export async function createTournamentMatch(input: {
   );
 
   return ref.id;
+}
+
+export async function updateTournamentMatch(input: {
+  tournamentId: string;
+  matchId: string;
+  groupId?: string | null;
+  team1Id: string;
+  team2Id: string;
+  scheduledAt?: Date | null;
+  status?: "scheduled" | "finished";
+  score1?: number | null;
+  score2?: number | null;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { Timestamp, doc, serverTimestamp, updateDoc } = await import(
+    "firebase/firestore"
+  );
+
+  const winnerTeamId =
+    input.status === "finished" &&
+    typeof input.score1 === "number" &&
+    typeof input.score2 === "number"
+      ? input.score1 === input.score2
+        ? null
+        : input.score1 > input.score2
+          ? input.team1Id
+          : input.team2Id
+      : undefined;
+
+  const payload: Record<string, unknown> = {
+    groupId: input.groupId ?? null,
+    team1Id: input.team1Id,
+    team2Id: input.team2Id,
+    scheduledAt: input.scheduledAt ? Timestamp.fromDate(input.scheduledAt) : null,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (winnerTeamId !== undefined) payload.winnerTeamId = winnerTeamId;
+
+  await updateDoc(
+    doc(firestore, "tournaments", input.tournamentId, "matches", input.matchId),
+    payload,
+  );
+}
+
+export async function deleteTournamentMatch(input: {
+  tournamentId: string;
+  matchId: string;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { deleteDoc, doc } = await import("firebase/firestore");
+
+  await deleteDoc(
+    doc(firestore, "tournaments", input.tournamentId, "matches", input.matchId),
+  );
 }
 
 export async function createTournamentMatchesBatch(input: {
