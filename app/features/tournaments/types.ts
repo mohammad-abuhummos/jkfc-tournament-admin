@@ -6,6 +6,8 @@ export type TournamentDoc = {
   nameEn: string;
   nameAr: string;
   description?: string;
+  logoUrl?: string;
+  logoPath?: string;
   status: TournamentStatus;
   createdBy: string;
   createdAt: Timestamp;

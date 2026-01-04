@@ -4,6 +4,7 @@ import type {
   Group,
   Team,
   Tournament,
+  TournamentStatus,
   TournamentMatch,
 } from "./types";
 
@@ -70,6 +71,8 @@ export async function createTournament(input: {
     nameEn: input.nameEn,
     nameAr: input.nameAr,
     description: input.description || "",
+    logoUrl: "",
+    logoPath: "",
     status: "draft",
     createdBy: input.userId,
     createdAt: serverTimestamp(),
@@ -77,6 +80,64 @@ export async function createTournament(input: {
   });
 
   return ref.id;
+}
+
+export async function updateTournament(input: {
+  tournamentId: string;
+  nameEn: string;
+  nameAr: string;
+  description?: string;
+  status: TournamentStatus;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { doc, serverTimestamp, updateDoc } = await import("firebase/firestore");
+
+  await updateDoc(doc(firestore, "tournaments", input.tournamentId), {
+    nameEn: input.nameEn,
+    nameAr: input.nameAr,
+    description: input.description || "",
+    status: input.status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function uploadTournamentLogo(input: {
+  tournamentId: string;
+  file: File;
+  previousPath?: string | null;
+}): Promise<{ logoUrl: string; logoPath: string }> {
+  const storage = await getStorageClient();
+  const firestore = await getFirestoreClient();
+
+  const { deleteObject, getDownloadURL, ref, uploadBytes } = await import(
+    "firebase/storage"
+  );
+  const { doc, serverTimestamp, updateDoc } = await import("firebase/firestore");
+
+  const ext = getFileExtension(input.file.name);
+  const logoPath = `tournaments/${input.tournamentId}/logo${ext ? `.${ext}` : ""}`;
+  const storageRef = ref(storage, logoPath);
+
+  await uploadBytes(storageRef, input.file);
+  const logoUrl = await getDownloadURL(storageRef);
+
+  await updateDoc(doc(firestore, "tournaments", input.tournamentId), {
+    logoUrl,
+    logoPath,
+    updatedAt: serverTimestamp(),
+  });
+
+  // Best-effort cleanup of previous logo file.
+  if (input.previousPath && input.previousPath !== logoPath) {
+    try {
+      await deleteObject(ref(storage, input.previousPath));
+    } catch (err) {
+      // ignore (missing permission, file already deleted, etc.)
+      console.warn("[uploadTournamentLogo] Failed to delete old logo", err);
+    }
+  }
+
+  return { logoUrl, logoPath };
 }
 
 export async function subscribeToTournamentTeams(

@@ -90,10 +90,23 @@ function TournamentLayoutInner({ tournamentId }: { tournamentId: string }) {
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
       <aside className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="mb-4">
-          <div className="text-sm font-semibold text-gray-900">
-            {tournament.nameEn}
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+              {tournament.logoUrl ? (
+                <img
+                  src={tournament.logoUrl}
+                  alt={tournament.nameEn}
+                  className="h-full w-full object-cover"
+                />
+              ) : null}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {tournament.nameEn}
+              </div>
+              <div className="text-sm text-gray-600">{tournament.nameAr}</div>
+            </div>
           </div>
-          <div className="text-sm text-gray-600">{tournament.nameAr}</div>
         </div>
 
         <nav className="space-y-1">
@@ -102,6 +115,7 @@ function TournamentLayoutInner({ tournamentId }: { tournamentId: string }) {
           <MenuLink to={`${base}/groups`} label="Groups" />
           <MenuLink to={`${base}/matches`} label="Matches" />
           <MenuLink to={`${base}/bracket`} label="Bracket" />
+          <MenuLink to={`${base}/settings`} label="Settings" />
         </nav>
 
         <div className="mt-6 border-t border-gray-200 pt-4">
