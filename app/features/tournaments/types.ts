@@ -83,4 +83,33 @@ export type BracketState = {
   updatedAt?: Timestamp;
 };
 
+/**
+ * Event Bracket Types - Tree-style bracket with left/right sides
+ */
+export type EventBracketMatch = {
+  id: string;
+  team1Id: string | null;
+  team2Id: string | null;
+  score1: number | null;
+  score2: number | null;
+  winnerId: string | null;
+  status: "pending" | "scheduled" | "finished";
+};
+
+export type EventBracketSide = {
+  groupId: string | null;
+  round1Matches: EventBracketMatch[];
+  winnerSlots: Array<{ id: string; teamId: string | null }>;
+};
+
+export type EventBracketState = {
+  leftSide: EventBracketSide;
+  rightSide: EventBracketSide;
+  semiFinals: EventBracketMatch[];
+  thirdPlace: EventBracketMatch;
+  final: EventBracketMatch;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+};
+
 

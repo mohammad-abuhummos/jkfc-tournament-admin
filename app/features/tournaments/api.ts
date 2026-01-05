@@ -1,6 +1,7 @@
 import { getFirestoreClient, getStorageClient } from "~/firebase/client";
 import type {
   BracketState,
+  EventBracketState,
   Group,
   Team,
   Tournament,
@@ -195,9 +196,8 @@ export async function createTournamentTeam(input: {
     const { getDownloadURL, ref, uploadBytes } = await import("firebase/storage");
 
     const ext = getFileExtension(input.logoFile.name);
-    const path = `tournaments/${input.tournamentId}/teams/${teamRef.id}/logo${
-      ext ? `.${ext}` : ""
-    }`;
+    const path = `tournaments/${input.tournamentId}/teams/${teamRef.id}/logo${ext ? `.${ext}` : ""
+      }`;
 
     const storageRef = ref(storage, path);
     await uploadBytes(storageRef, input.logoFile);
@@ -241,9 +241,8 @@ export async function updateTournamentTeam(input: {
     );
 
     const ext = getFileExtension(input.logoFile.name);
-    const logoPath = `tournaments/${input.tournamentId}/teams/${input.teamId}/logo${
-      ext ? `.${ext}` : ""
-    }`;
+    const logoPath = `tournaments/${input.tournamentId}/teams/${input.teamId}/logo${ext ? `.${ext}` : ""
+      }`;
     const storageRef = ref(storage, logoPath);
 
     await uploadBytes(storageRef, input.logoFile);
@@ -470,8 +469,8 @@ export async function updateTournamentMatch(input: {
 
   const winnerTeamId =
     input.status === "finished" &&
-    typeof input.score1 === "number" &&
-    typeof input.score2 === "number"
+      typeof input.score1 === "number" &&
+      typeof input.score2 === "number"
       ? input.score1 === input.score2
         ? null
         : input.score1 > input.score2
@@ -599,6 +598,41 @@ export async function saveTournamentBracketState(input: {
 
   await setDoc(
     doc(firestore, "tournaments", input.tournamentId, "bracket", "state"),
+    {
+      ...input.bracket,
+      updatedAt: serverTimestamp(),
+      createdAt: input.bracket.createdAt ?? serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+export async function subscribeToEventBracketState(
+  tournamentId: string,
+  onValue: (bracket: EventBracketState | null) => void,
+  onError?: (err: unknown) => void,
+): Promise<Unsubscribe> {
+  const firestore = await getFirestoreClient();
+  const { doc, onSnapshot } = await import("firebase/firestore");
+
+  return onSnapshot(
+    doc(firestore, "tournaments", tournamentId, "eventBracket", "state"),
+    (snap) => {
+      onValue(snap.exists() ? (snap.data() as EventBracketState) : null);
+    },
+    onError,
+  );
+}
+
+export async function saveEventBracketState(input: {
+  tournamentId: string;
+  bracket: EventBracketState;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { doc, serverTimestamp, setDoc } = await import("firebase/firestore");
+
+  await setDoc(
+    doc(firestore, "tournaments", input.tournamentId, "eventBracket", "state"),
     {
       ...input.bracket,
       updatedAt: serverTimestamp(),
