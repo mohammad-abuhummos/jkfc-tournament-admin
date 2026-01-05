@@ -3,10 +3,15 @@ import { useCallback, useEffect, useState, useRef } from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.event";
 import {
+  createTournamentMatch,
+  deleteTournamentMatch,
   saveEventBracketState,
+  setTournamentMatchResult,
   subscribeToEventBracketState,
   subscribeToTournamentGroups,
+  subscribeToTournamentMatches,
   subscribeToTournamentTeams,
+  updateTournamentMatch,
 } from "~/features/tournaments/api";
 import { useTournamentManager } from "~/features/tournaments/context";
 import type {
@@ -14,9 +19,10 @@ import type {
   EventBracketState,
   Group,
   Team,
+  TournamentMatch,
 } from "~/features/tournaments/types";
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ }: Route.MetaArgs) {
   return [{ title: "Event | JKFC Admin" }];
 }
 
@@ -217,9 +223,8 @@ function ContextMenu({
           {/* Assign Team 1 - Click to toggle submenu */}
           <div className="relative">
             <button
-              className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100 ${
-                openSubmenu === "team1" ? "bg-blue-50 text-blue-700" : "text-gray-700"
-              }`}
+              className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100 ${openSubmenu === "team1" ? "bg-blue-50 text-blue-700" : "text-gray-700"
+                }`}
               onClick={() => setOpenSubmenu(openSubmenu === "team1" ? null : "team1")}
             >
               <span>Assign Team 1</span>
@@ -241,9 +246,8 @@ function ContextMenu({
                 {availableTeams.map((team) => (
                   <button
                     key={team.id}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${
-                      match?.team1Id === team.id ? "bg-blue-50 text-blue-700" : "text-gray-700"
-                    }`}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${match?.team1Id === team.id ? "bg-blue-50 text-blue-700" : "text-gray-700"
+                      }`}
                     onClick={() => {
                       onAssignTeam(matchId, 1, team.id, round, side);
                       onClose();
@@ -259,9 +263,8 @@ function ContextMenu({
           {/* Assign Team 2 - Click to toggle submenu */}
           <div className="relative">
             <button
-              className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100 ${
-                openSubmenu === "team2" ? "bg-blue-50 text-blue-700" : "text-gray-700"
-              }`}
+              className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100 ${openSubmenu === "team2" ? "bg-blue-50 text-blue-700" : "text-gray-700"
+                }`}
               onClick={() => setOpenSubmenu(openSubmenu === "team2" ? null : "team2")}
             >
               <span>Assign Team 2</span>
@@ -283,9 +286,8 @@ function ContextMenu({
                 {availableTeams.map((team) => (
                   <button
                     key={team.id}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${
-                      match?.team2Id === team.id ? "bg-blue-50 text-blue-700" : "text-gray-700"
-                    }`}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${match?.team2Id === team.id ? "bg-blue-50 text-blue-700" : "text-gray-700"
+                      }`}
                     onClick={() => {
                       onAssignTeam(matchId, 2, team.id, round, side);
                       onClose();
@@ -422,8 +424,8 @@ type MatchCardProps = {
 };
 
 function MatchCard({ match, teams, size = "sm", highlight = false, variant = "default", onContextMenu }: MatchCardProps) {
-  const team1 = match.team1Id ? teams.find((t) => t.id === match.team1Id) : null;
-  const team2 = match.team2Id ? teams.find((t) => t.id === match.team2Id) : null;
+  const team1 = match.team1Id ? teams.find((t) => t.id === match.team1Id) ?? null : null;
+  const team2 = match.team2Id ? teams.find((t) => t.id === match.team2Id) ?? null : null;
 
   const sizeClasses = {
     sm: "py-2",
@@ -527,7 +529,7 @@ type BracketTreeProps = {
   bracket: EventBracketState;
   teams: Team[];
   groups: Group[];
-  onMatchContext: (e: React.MouseEvent, matchId: string, round: string, side?: "left" | "right") => void;
+  onMatchContext: (e: React.MouseEvent, matchId: string, round: "round1" | "semi" | "third" | "final", side?: "left" | "right") => void;
   onWinnerContext: (e: React.MouseEvent, winnerId: string, side: "left" | "right") => void;
   onGroupContext: (e: React.MouseEvent, side: "left" | "right") => void;
 };
@@ -685,6 +687,7 @@ export default function TournamentEvent() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [bracket, setBracket] = useState<EventBracketState | null>(null);
+  const [groupMatches, setGroupMatches] = useState<TournamentMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -698,16 +701,30 @@ export default function TournamentEvent() {
   const [score1, setScore1] = useState("");
   const [score2, setScore2] = useState("");
 
+  // Group Match Modal State
+  const [createMatchModal, setCreateMatchModal] = useState<{ groupId: string } | null>(null);
+  const [editMatchModal, setEditMatchModal] = useState<TournamentMatch | null>(null);
+  const [matchForm, setMatchForm] = useState({
+    team1Id: "",
+    team2Id: "",
+    date: "",
+    time: "",
+    score1: "",
+    score2: "",
+  });
+  const [matchSaving, setMatchSaving] = useState(false);
+
   // Load data
   useEffect(() => {
     let mounted = true;
     let unsubTeams: (() => void) | undefined;
     let unsubGroups: (() => void) | undefined;
     let unsubBracket: (() => void) | undefined;
+    let unsubMatches: (() => void) | undefined;
 
-    const loaded = { teams: false, groups: false, bracket: false };
+    const loaded = { teams: false, groups: false, bracket: false, matches: false };
     const checkLoaded = () => {
-      if (loaded.teams && loaded.groups && loaded.bracket && mounted) {
+      if (loaded.teams && loaded.groups && loaded.bracket && loaded.matches && mounted) {
         setLoading(false);
       }
     };
@@ -757,6 +774,20 @@ export default function TournamentEvent() {
             checkLoaded();
           }
         );
+
+        unsubMatches = await subscribeToTournamentMatches(
+          tournamentId,
+          (items) => {
+            if (!mounted) return;
+            setGroupMatches(items);
+            loaded.matches = true;
+            checkLoaded();
+          },
+          () => {
+            loaded.matches = true;
+            checkLoaded();
+          }
+        );
       } catch (err) {
         console.error("[Event] Failed to load data", err);
         if (mounted) {
@@ -771,6 +802,7 @@ export default function TournamentEvent() {
       unsubTeams?.();
       unsubGroups?.();
       unsubBracket?.();
+      unsubMatches?.();
     };
   }, [tournamentId]);
 
@@ -791,7 +823,7 @@ export default function TournamentEvent() {
 
   // Context menu handlers
   const handleMatchContext = useCallback(
-    (e: React.MouseEvent, matchId: string, round: string, side?: "left" | "right") => {
+    (e: React.MouseEvent, matchId: string, round: "round1" | "semi" | "third" | "final", side?: "left" | "right") => {
       e.preventDefault();
       setContextMenu({ x: e.clientX, y: e.clientY, type: "match", matchId, round, side });
     },
@@ -983,6 +1015,150 @@ export default function TournamentEvent() {
     void saveBracket(newBracket);
   }, [saveBracket]);
 
+  // Group Match Handlers
+  const openCreateMatchModal = useCallback((groupId: string) => {
+    setMatchForm({ team1Id: "", team2Id: "", date: "", time: "", score1: "", score2: "" });
+    setCreateMatchModal({ groupId });
+  }, []);
+
+  const openEditMatchModal = useCallback((match: TournamentMatch) => {
+    const scheduledDate = match.scheduledAt?.toDate();
+    setMatchForm({
+      team1Id: match.team1Id,
+      team2Id: match.team2Id,
+      date: scheduledDate ? scheduledDate.toISOString().split("T")[0] : "",
+      time: scheduledDate ? scheduledDate.toTimeString().slice(0, 5) : "",
+      score1: match.score1?.toString() ?? "",
+      score2: match.score2?.toString() ?? "",
+    });
+    setEditMatchModal(match);
+  }, []);
+
+  const handleCreateMatch = useCallback(async () => {
+    if (!createMatchModal || !matchForm.team1Id || !matchForm.team2Id) return;
+    if (matchForm.team1Id === matchForm.team2Id) {
+      alert("Team 1 and Team 2 cannot be the same.");
+      return;
+    }
+
+    setMatchSaving(true);
+    try {
+      let scheduledAt: Date | null = null;
+      if (matchForm.date && matchForm.time) {
+        scheduledAt = new Date(`${matchForm.date}T${matchForm.time}`);
+      } else if (matchForm.date) {
+        scheduledAt = new Date(`${matchForm.date}T00:00`);
+      }
+
+      await createTournamentMatch({
+        tournamentId,
+        groupId: createMatchModal.groupId,
+        team1Id: matchForm.team1Id,
+        team2Id: matchForm.team2Id,
+        scheduledAt,
+      });
+      setCreateMatchModal(null);
+    } catch (err) {
+      console.error("[Event] Failed to create match", err);
+      alert("Failed to create match.");
+    } finally {
+      setMatchSaving(false);
+    }
+  }, [createMatchModal, matchForm, tournamentId]);
+
+  const handleUpdateMatch = useCallback(async () => {
+    if (!editMatchModal || !matchForm.team1Id || !matchForm.team2Id) return;
+    if (matchForm.team1Id === matchForm.team2Id) {
+      alert("Team 1 and Team 2 cannot be the same.");
+      return;
+    }
+
+    setMatchSaving(true);
+    try {
+      let scheduledAt: Date | null = null;
+      if (matchForm.date && matchForm.time) {
+        scheduledAt = new Date(`${matchForm.date}T${matchForm.time}`);
+      } else if (matchForm.date) {
+        scheduledAt = new Date(`${matchForm.date}T00:00`);
+      }
+
+      // Update basic match info
+      await updateTournamentMatch({
+        tournamentId,
+        matchId: editMatchModal.id,
+        groupId: editMatchModal.groupId,
+        team1Id: matchForm.team1Id,
+        team2Id: matchForm.team2Id,
+        scheduledAt,
+      });
+
+      // If scores are provided, set the result
+      const s1 = matchForm.score1 === "" ? null : parseInt(matchForm.score1, 10);
+      const s2 = matchForm.score2 === "" ? null : parseInt(matchForm.score2, 10);
+      if (s1 !== null && s2 !== null && !isNaN(s1) && !isNaN(s2)) {
+        await setTournamentMatchResult({
+          tournamentId,
+          matchId: editMatchModal.id,
+          team1Id: matchForm.team1Id,
+          team2Id: matchForm.team2Id,
+          score1: s1,
+          score2: s2,
+        });
+      }
+
+      setEditMatchModal(null);
+    } catch (err) {
+      console.error("[Event] Failed to update match", err);
+      alert("Failed to update match.");
+    } finally {
+      setMatchSaving(false);
+    }
+  }, [editMatchModal, matchForm, tournamentId]);
+
+  const handleDeleteMatch = useCallback(async (matchId: string) => {
+    if (!confirm("Are you sure you want to delete this match?")) return;
+
+    try {
+      await deleteTournamentMatch({ tournamentId, matchId });
+    } catch (err) {
+      console.error("[Event] Failed to delete match", err);
+      alert("Failed to delete match.");
+    }
+  }, [tournamentId]);
+
+  // Get matches for a specific group
+  const getMatchesForGroup = useCallback(
+    (groupId: string) => {
+      return groupMatches
+        .filter((m) => m.groupId === groupId)
+        .sort((a, b) => {
+          // Sort by scheduled date if available, otherwise by creation date
+          const aDate = a.scheduledAt?.toDate().getTime() ?? a.createdAt?.toDate().getTime() ?? 0;
+          const bDate = b.scheduledAt?.toDate().getTime() ?? b.createdAt?.toDate().getTime() ?? 0;
+          return aDate - bDate;
+        });
+    },
+    [groupMatches]
+  );
+
+  // Get team name helper
+  const getTeamName = useCallback(
+    (teamId: string) => {
+      return teams.find((t) => t.id === teamId)?.nameEn ?? "Unknown Team";
+    },
+    [teams]
+  );
+
+  // Get teams for a group
+  const getTeamsForGroup = useCallback(
+    (groupId: string) => {
+      const group = groups.find((g) => g.id === groupId);
+      if (!group) return [];
+      return teams.filter((t) => group.teamIds.includes(t.id));
+    },
+    [groups, teams]
+  );
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -1047,7 +1223,7 @@ export default function TournamentEvent() {
 
       {/* Instructions */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
-        <h3 className="text-sm font-semibold text-gray-900">How to use</h3>
+        <h3 className="text-sm font-semibold text-gray-900">How to use the bracket</h3>
         <ul className="mt-3 space-y-2 text-sm text-gray-600">
           <li className="flex items-start gap-2">
             <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
@@ -1068,6 +1244,171 @@ export default function TournamentEvent() {
         </ul>
       </div>
 
+      {/* ============================================
+          SECTION 2: GROUP STAGE MATCHES
+          ============================================ */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">Group Stage Matches</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Create and manage matches for each group. Set the date, time, teams, and update scores.
+          </p>
+        </div>
+
+        {groups.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+            <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+              <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <h3 className="mt-4 text-sm font-medium text-gray-900">No groups yet</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Create groups in the Groups tab first, then come back to manage matches.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {groups.map((group) => {
+              const groupTeams = getTeamsForGroup(group.id);
+              const matches = getMatchesForGroup(group.id);
+
+              return (
+                <div key={group.id} className="rounded-xl border border-gray-200 overflow-hidden">
+                  {/* Group Header */}
+                  <div className="flex items-center justify-between bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-sm font-bold text-blue-700">
+                        {group.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{group.name}</h3>
+                        <p className="text-xs text-gray-500">{groupTeams.length} teams • {matches.length} matches</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                      onClick={() => openCreateMatchModal(group.id)}
+                      disabled={groupTeams.length < 2}
+                      title={groupTeams.length < 2 ? "Add at least 2 teams to create matches" : "Create a new match"}
+                    >
+                      + Add Match
+                    </button>
+                  </div>
+
+                  {/* Matches List */}
+                  <div className="divide-y divide-gray-100">
+                    {matches.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-gray-500">
+                        No matches yet. Click "Add Match" to create one.
+                      </div>
+                    ) : (
+                      matches.map((match) => {
+                        const team1 = teams.find((t) => t.id === match.team1Id);
+                        const team2 = teams.find((t) => t.id === match.team2Id);
+                        const scheduledDate = match.scheduledAt?.toDate();
+
+                        return (
+                          <div
+                            key={match.id}
+                            className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors"
+                          >
+                            {/* Date/Time */}
+                            <div className="w-24 shrink-0 text-center">
+                              {scheduledDate ? (
+                                <>
+                                  <div className="text-xs font-medium text-gray-900">
+                                    {scheduledDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {scheduledDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-gray-400">TBD</div>
+                              )}
+                            </div>
+
+                            {/* Teams */}
+                            <div className="flex flex-1 items-center justify-center gap-3">
+                              {/* Team 1 */}
+                              <div className="flex items-center gap-2 min-w-[120px] justify-end">
+                                <span className="text-sm font-medium text-gray-900 truncate">
+                                  {team1?.nameEn ?? "TBD"}
+                                </span>
+                                {team1?.logoUrl && (
+                                  <img src={team1.logoUrl} alt="" className="h-6 w-6 rounded object-cover" />
+                                )}
+                              </div>
+
+                              {/* Score */}
+                              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-gray-100 min-w-[80px] justify-center">
+                                <span className={`text-lg font-bold ${match.status === "finished" ? "text-gray-900" : "text-gray-400"}`}>
+                                  {match.score1 ?? "-"}
+                                </span>
+                                <span className="text-gray-400">:</span>
+                                <span className={`text-lg font-bold ${match.status === "finished" ? "text-gray-900" : "text-gray-400"}`}>
+                                  {match.score2 ?? "-"}
+                                </span>
+                              </div>
+
+                              {/* Team 2 */}
+                              <div className="flex items-center gap-2 min-w-[120px]">
+                                {team2?.logoUrl && (
+                                  <img src={team2.logoUrl} alt="" className="h-6 w-6 rounded object-cover" />
+                                )}
+                                <span className="text-sm font-medium text-gray-900 truncate">
+                                  {team2?.nameEn ?? "TBD"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
+                            <div className="w-20 text-center">
+                              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${match.status === "finished"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700"
+                                }`}>
+                                {match.status === "finished" ? "Finished" : "Scheduled"}
+                              </span>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-blue-600"
+                                onClick={() => openEditMatchModal(match)}
+                                title="Edit match"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                                onClick={() => handleDeleteMatch(match.id)}
+                                title="Delete match"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Context Menu */}
       <ContextMenu
         state={contextMenu}
@@ -1082,7 +1423,7 @@ export default function TournamentEvent() {
         onClearMatch={handleClearMatch}
       />
 
-      {/* Score Modal */}
+      {/* Score Modal (for bracket) */}
       <Modal
         open={!!scoreModal}
         title="Set Match Score"
@@ -1129,6 +1470,217 @@ export default function TournamentEvent() {
               Save Score
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Create Match Modal */}
+      <Modal
+        open={!!createMatchModal}
+        title="Create Match"
+        onClose={() => setCreateMatchModal(null)}
+      >
+        <div className="space-y-4">
+          {createMatchModal && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Team 1</label>
+                  <select
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.team1Id}
+                    onChange={(e) => setMatchForm({ ...matchForm, team1Id: e.target.value })}
+                  >
+                    <option value="">Select team...</option>
+                    {getTeamsForGroup(createMatchModal.groupId).map((team) => (
+                      <option key={team.id} value={team.id} disabled={team.id === matchForm.team2Id}>
+                        {team.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Team 2</label>
+                  <select
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.team2Id}
+                    onChange={(e) => setMatchForm({ ...matchForm, team2Id: e.target.value })}
+                  >
+                    <option value="">Select team...</option>
+                    {getTeamsForGroup(createMatchModal.groupId).map((team) => (
+                      <option key={team.id} value={team.id} disabled={team.id === matchForm.team1Id}>
+                        {team.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Date</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.date}
+                    onChange={(e) => setMatchForm({ ...matchForm, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Time</label>
+                  <input
+                    type="time"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.time}
+                    onChange={(e) => setMatchForm({ ...matchForm, time: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Scores start as "-" (not set). You can update them later by editing the match.
+              </p>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  onClick={() => setCreateMatchModal(null)}
+                  disabled={matchSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  onClick={handleCreateMatch}
+                  disabled={matchSaving || !matchForm.team1Id || !matchForm.team2Id}
+                >
+                  {matchSaving ? "Creating..." : "Create Match"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* Edit Match Modal */}
+      <Modal
+        open={!!editMatchModal}
+        title="Edit Match"
+        onClose={() => setEditMatchModal(null)}
+      >
+        <div className="space-y-4">
+          {editMatchModal && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Team 1</label>
+                  <select
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.team1Id}
+                    onChange={(e) => setMatchForm({ ...matchForm, team1Id: e.target.value })}
+                  >
+                    <option value="">Select team...</option>
+                    {(editMatchModal.groupId ? getTeamsForGroup(editMatchModal.groupId) : teams).map((team) => (
+                      <option key={team.id} value={team.id} disabled={team.id === matchForm.team2Id}>
+                        {team.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Team 2</label>
+                  <select
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.team2Id}
+                    onChange={(e) => setMatchForm({ ...matchForm, team2Id: e.target.value })}
+                  >
+                    <option value="">Select team...</option>
+                    {(editMatchModal.groupId ? getTeamsForGroup(editMatchModal.groupId) : teams).map((team) => (
+                      <option key={team.id} value={team.id} disabled={team.id === matchForm.team1Id}>
+                        {team.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Date</label>
+                  <input
+                    type="date"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.date}
+                    onChange={(e) => setMatchForm({ ...matchForm, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Time</label>
+                  <input
+                    type="time"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    value={matchForm.time}
+                    onChange={(e) => setMatchForm({ ...matchForm, time: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Match Result</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      {getTeamName(matchForm.team1Id) || "Team 1"} Score
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      value={matchForm.score1}
+                      onChange={(e) => setMatchForm({ ...matchForm, score1: e.target.value })}
+                      placeholder="-"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      {getTeamName(matchForm.team2Id) || "Team 2"} Score
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      value={matchForm.score2}
+                      onChange={(e) => setMatchForm({ ...matchForm, score2: e.target.value })}
+                      placeholder="-"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Leave scores empty to keep the match as "Scheduled". Fill both scores to mark as "Finished".
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  onClick={() => setEditMatchModal(null)}
+                  disabled={matchSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  onClick={handleUpdateMatch}
+                  disabled={matchSaving || !matchForm.team1Id || !matchForm.team2Id}
+                >
+                  {matchSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>
