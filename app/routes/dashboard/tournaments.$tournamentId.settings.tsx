@@ -19,6 +19,10 @@ export default function TournamentSettings() {
   const [nameAr, setNameAr] = React.useState(tournament.nameAr);
   const [description, setDescription] = React.useState(tournament.description ?? "");
   const [status, setStatus] = React.useState<TournamentStatus>(tournament.status);
+  const [youtubeUrl, setYoutubeUrl] = React.useState(tournament.youtubeUrl ?? "");
+  const [youtubeActive, setYoutubeActive] = React.useState<boolean>(
+    tournament.youtubeActive ?? false,
+  );
 
   const [logoFile, setLogoFile] = React.useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = React.useState<string | null>(null);
@@ -32,6 +36,8 @@ export default function TournamentSettings() {
     setNameAr(tournament.nameAr);
     setDescription(tournament.description ?? "");
     setStatus(tournament.status);
+    setYoutubeUrl(tournament.youtubeUrl ?? "");
+    setYoutubeActive(tournament.youtubeActive ?? false);
     setLogoFile(null);
     setLogoPreviewUrl(null);
   }, [tournamentId]);
@@ -52,12 +58,21 @@ export default function TournamentSettings() {
     setError(null);
     setMessage(null);
 
+    const trimmedYoutubeUrl = youtubeUrl.trim();
+    if (youtubeActive && !trimmedYoutubeUrl) {
+      setError("Please add a YouTube link or set it to inactive.");
+      setSaving(false);
+      return;
+    }
+
     try {
       await updateTournament({
         tournamentId,
         nameEn: nameEn.trim(),
         nameAr: nameAr.trim(),
         description: description.trim(),
+        youtubeUrl: trimmedYoutubeUrl,
+        youtubeActive,
         status,
       });
 
@@ -86,7 +101,7 @@ export default function TournamentSettings() {
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Update tournament name, status, and logo.
+          Update tournament name, status, YouTube link, and logo.
         </p>
 
         {error ? (
@@ -144,6 +159,39 @@ export default function TournamentSettings() {
               <option value="published">published</option>
             </select>
           </label>
+
+          <div className="rounded-xl border border-gray-200 p-4">
+            <div className="text-sm font-semibold text-gray-900">YouTube</div>
+            <p className="mt-1 text-sm text-gray-600">
+              Add a YouTube link and choose if it&apos;s active or inactive.
+            </p>
+
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <label className="block sm:col-span-2">
+                <span className="text-sm font-medium text-gray-700">Link</span>
+                <input
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Status</span>
+                <select
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  value={youtubeActive ? "active" : "inactive"}
+                  onChange={(e) => setYoutubeActive(e.target.value === "active")}
+                >
+                  <option value="inactive">inactive</option>
+                  <option value="active">active</option>
+                </select>
+              </label>
+            </div>
+          </div>
 
           <div className="rounded-xl border border-gray-200 p-4">
             <div className="flex items-start gap-4">

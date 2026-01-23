@@ -6,6 +6,8 @@ export type TournamentDoc = {
   nameEn: string;
   nameAr: string;
   description?: string;
+  youtubeUrl?: string;
+  youtubeActive?: boolean;
   logoUrl?: string;
   logoPath?: string;
   status: TournamentStatus;

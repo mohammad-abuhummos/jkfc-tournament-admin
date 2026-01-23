@@ -75,6 +75,8 @@ export async function createTournament(input: {
     nameEn: input.nameEn,
     nameAr: input.nameAr,
     description: input.description || "",
+    youtubeUrl: "",
+    youtubeActive: false,
     logoUrl: "",
     logoPath: "",
     status: "draft",
@@ -91,18 +93,25 @@ export async function updateTournament(input: {
   nameEn: string;
   nameAr: string;
   description?: string;
+  youtubeUrl?: string;
+  youtubeActive?: boolean;
   status: TournamentStatus;
 }): Promise<void> {
   const firestore = await getFirestoreClient();
   const { doc, serverTimestamp, updateDoc } = await import("firebase/firestore");
 
-  await updateDoc(doc(firestore, "tournaments", input.tournamentId), {
+  const payload: Record<string, unknown> = {
     nameEn: input.nameEn,
     nameAr: input.nameAr,
     description: input.description || "",
     status: input.status,
     updatedAt: serverTimestamp(),
-  });
+  };
+
+  if (input.youtubeUrl !== undefined) payload.youtubeUrl = input.youtubeUrl || "";
+  if (input.youtubeActive !== undefined) payload.youtubeActive = input.youtubeActive;
+
+  await updateDoc(doc(firestore, "tournaments", input.tournamentId), payload);
 }
 
 export async function uploadTournamentLogo(input: {
