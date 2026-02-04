@@ -2,6 +2,16 @@ import type { Timestamp } from "firebase/firestore";
 
 export type TournamentStatus = "draft" | "published";
 
+/**
+ * Per-tournament About Us content stored in tournament doc as aboutUs.
+ * paragraphs is required; logoUrl and logoAlt are optional.
+ */
+export type TournamentAboutUs = {
+  logoUrl?: string;
+  logoAlt?: string;
+  paragraphs: string[];
+};
+
 export type TournamentDoc = {
   nameEn: string;
   nameAr: string;
@@ -14,6 +24,7 @@ export type TournamentDoc = {
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  aboutUs?: TournamentAboutUs;
 };
 
 export type Tournament = TournamentDoc & { id: string };

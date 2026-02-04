@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, NavLink, Outlet, useParams } from "react-router";
 
 import type { Route } from "./+types/tournaments.$tournamentId";
+import { AboutUs } from "~/components/AboutUs";
 import { FullPageSpinner } from "~/components/FullPageSpinner";
 import { subscribeToTournament } from "~/features/tournaments/api";
 import type { Tournament } from "~/features/tournaments/types";
@@ -126,8 +127,9 @@ function TournamentLayoutInner({ tournamentId }: { tournamentId: string }) {
         </div>
       </aside>
 
-      <section className="min-w-0">
+      <section className="min-w-0 space-y-6">
         <Outlet context={{ tournamentId, tournament }} />
+        <AboutUs tournamentId={tournamentId} />
       </section>
     </div>
   );

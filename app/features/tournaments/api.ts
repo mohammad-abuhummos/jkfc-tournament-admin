@@ -5,6 +5,7 @@ import type {
   Group,
   Team,
   Tournament,
+  TournamentAboutUs,
   TournamentStatus,
   TournamentMatch,
 } from "./types";
@@ -112,6 +113,19 @@ export async function updateTournament(input: {
   if (input.youtubeActive !== undefined) payload.youtubeActive = input.youtubeActive;
 
   await updateDoc(doc(firestore, "tournaments", input.tournamentId), payload);
+}
+
+export async function updateTournamentAboutUs(input: {
+  tournamentId: string;
+  aboutUs: TournamentAboutUs;
+}): Promise<void> {
+  const firestore = await getFirestoreClient();
+  const { doc, serverTimestamp, updateDoc } = await import("firebase/firestore");
+
+  await updateDoc(doc(firestore, "tournaments", input.tournamentId), {
+    aboutUs: input.aboutUs,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function uploadTournamentLogo(input: {

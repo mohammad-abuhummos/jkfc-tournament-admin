@@ -3,10 +3,14 @@ import * as React from "react";
 import type { Route } from "./+types/tournaments.$tournamentId.settings";
 import {
   updateTournament,
+  updateTournamentAboutUs,
   uploadTournamentLogo,
 } from "~/features/tournaments/api";
 import { useTournamentManager } from "~/features/tournaments/context";
-import type { TournamentStatus } from "~/features/tournaments/types";
+import type {
+  TournamentAboutUs,
+  TournamentStatus,
+} from "~/features/tournaments/types";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Tournament Settings | JKFC Admin" }];
@@ -31,6 +35,17 @@ export default function TournamentSettings() {
   const [error, setError] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
 
+  const [aboutUsLogoUrl, setAboutUsLogoUrl] = React.useState("");
+  const [aboutUsLogoAlt, setAboutUsLogoAlt] = React.useState("");
+  const [aboutUsParagraphs, setAboutUsParagraphs] = React.useState<string[]>([
+    "",
+  ]);
+  const [savingAboutUs, setSavingAboutUs] = React.useState(false);
+  const [aboutUsError, setAboutUsError] = React.useState<string | null>(null);
+  const [aboutUsMessage, setAboutUsMessage] = React.useState<string | null>(
+    null,
+  );
+
   React.useEffect(() => {
     setNameEn(tournament.nameEn);
     setNameAr(tournament.nameAr);
@@ -41,6 +56,19 @@ export default function TournamentSettings() {
     setLogoFile(null);
     setLogoPreviewUrl(null);
   }, [tournamentId]);
+
+  React.useEffect(() => {
+    const au = tournament.aboutUs;
+    if (au?.paragraphs?.length) {
+      setAboutUsLogoUrl(au.logoUrl ?? "");
+      setAboutUsLogoAlt(au.logoAlt ?? "");
+      setAboutUsParagraphs(au.paragraphs.length ? au.paragraphs : [""]);
+    } else {
+      setAboutUsLogoUrl("");
+      setAboutUsLogoAlt("");
+      setAboutUsParagraphs([""]);
+    }
+  }, [tournamentId, tournament.aboutUs]);
 
   React.useEffect(() => {
     if (!logoFile) {
@@ -92,6 +120,44 @@ export default function TournamentSettings() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSaveAboutUs(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingAboutUs(true);
+    setAboutUsError(null);
+    setAboutUsMessage(null);
+
+    const paragraphs = aboutUsParagraphs.map((p) => p.trim()).filter(Boolean);
+    // Empty paragraphs = use default About Us on tournament pages
+    try {
+      const aboutUs: TournamentAboutUs = {
+        paragraphs,
+        ...(aboutUsLogoUrl.trim() && { logoUrl: aboutUsLogoUrl.trim() }),
+        ...(aboutUsLogoAlt.trim() && { logoAlt: aboutUsLogoAlt.trim() }),
+      };
+      await updateTournamentAboutUs({ tournamentId, aboutUs });
+      setAboutUsMessage(
+        paragraphs.length
+          ? "About Us saved."
+          : "About Us cleared; default content will show on tournament pages.",
+      );
+    } catch (err) {
+      console.error("[Settings] save About Us failed", err);
+      setAboutUsError("Failed to save About Us.");
+    } finally {
+      setSavingAboutUs(false);
+    }
+  }
+
+  function addAboutUsParagraph() {
+    setAboutUsParagraphs((prev) => [...prev, ""]);
+  }
+
+  function removeAboutUsParagraph(index: number) {
+    setAboutUsParagraphs((prev) =>
+      prev.length > 1 ? prev.filter((_, i) => i !== index) : [""],
+    );
   }
 
   const currentLogo = logoPreviewUrl || tournament.logoUrl || "";
@@ -233,6 +299,106 @@ export default function TournamentSettings() {
             disabled={saving}
           >
             {saving ? "Saving..." : "Save changes"}
+          </button>
+        </form>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+        <h2 className="text-xl font-semibold text-gray-900">About Us</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          This block is shown on every tournament page. Add paragraphs and an
+          optional logo; if left empty, the default SMT Group content is shown.
+        </p>
+
+        {aboutUsError ? (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {aboutUsError}
+          </div>
+        ) : null}
+        {aboutUsMessage ? (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            {aboutUsMessage}
+          </div>
+        ) : null}
+
+        <form className="mt-6 space-y-6" onSubmit={handleSaveAboutUs}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">
+                About Us logo URL (optional)
+              </span>
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                type="url"
+                inputMode="url"
+                placeholder="https://..."
+                value={aboutUsLogoUrl}
+                onChange={(e) => setAboutUsLogoUrl(e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">
+                About Us logo alt text (optional)
+              </span>
+              <input
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. Tournament logo"
+                value={aboutUsLogoAlt}
+                onChange={(e) => setAboutUsLogoAlt(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Paragraphs</span>
+              <button
+                type="button"
+                onClick={addAboutUsParagraph}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                + Add paragraph
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Add one or more paragraphs for custom About Us. Save with all
+              paragraphs empty to use the default SMT Group content on tournament
+              pages.
+            </p>
+            <div className="mt-3 space-y-3">
+              {aboutUsParagraphs.map((p, i) => (
+                <div key={i} className="flex gap-2">
+                  <textarea
+                    className="min-h-[80px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={`Paragraph ${i + 1}`}
+                    value={p}
+                    onChange={(e) =>
+                      setAboutUsParagraphs((prev) => {
+                        const next = [...prev];
+                        next[i] = e.target.value;
+                        return next;
+                      })
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAboutUsParagraph(i)}
+                    className="shrink-0 rounded-lg border border-gray-300 px-2 text-sm text-gray-600 hover:bg-gray-50"
+                    title="Remove paragraph"
+                  >
+                    −
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+            disabled={savingAboutUs}
+          >
+            {savingAboutUs ? "Saving..." : "Save About Us"}
           </button>
         </form>
       </div>
