@@ -424,6 +424,46 @@ export default function TournamentMatches() {
     }
   }
 
+  async function handleUpdateFinishedScore(match: TournamentMatch) {
+    const score = scoreByMatch[match.id] ?? {
+      s1: match.score1 != null ? String(match.score1) : "",
+      s2: match.score2 != null ? String(match.score2) : "",
+    };
+    const s1 = Number(score.s1);
+    const s2 = Number(score.s2);
+
+    if (!Number.isFinite(s1) || !Number.isFinite(s2)) {
+      setError("Please enter valid scores.");
+      return;
+    }
+
+    setBusyMatchId(match.id);
+    setBusyAction("score");
+    setError(null);
+    setMessage(null);
+    try {
+      await updateTournamentMatch({
+        tournamentId,
+        matchId: match.id,
+        groupId: match.groupId ?? null,
+        team1Id: match.team1Id,
+        team2Id: match.team2Id,
+        scheduledAt: match.scheduledAt?.toDate() ?? null,
+        status: "finished",
+        score1: s1,
+        score2: s2,
+        actor,
+      });
+      setMessage("Score updated.");
+    } catch (err) {
+      console.error("[Matches] update finished score failed", err);
+      setError("Failed to update score.");
+    } finally {
+      setBusyMatchId(null);
+      setBusyAction(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -551,21 +591,66 @@ export default function TournamentMatches() {
 
                   <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
                     {m.status === "finished" ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-gray-700">
-                            Final score
-                          </div>
-                          <div className="mt-1 text-sm text-gray-600">
-                            {m.winnerTeamId
-                              ? `Winner: ${teamById.get(m.winnerTeamId)?.nameEn ?? m.winnerTeamId}`
-                              : "Draw"}
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-700">
+                              Final score
+                            </div>
+                            <div className="mt-1 text-sm text-gray-600">
+                              {m.winnerTeamId
+                                ? `Winner: ${teamById.get(m.winnerTeamId)?.nameEn ?? m.winnerTeamId}`
+                                : "Draw"}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 tabular-nums">
-                          {m.score1 ?? 0}{" "}
-                          <span className="font-semibold text-gray-400">-</span>{" "}
-                          {m.score2 ?? 0}
+                        <div className="grid gap-3 sm:grid-cols-[140px_140px_auto] items-end">
+                          <label className="block">
+                            <span className="text-sm font-medium text-gray-700">
+                              Score 1
+                            </span>
+                            <input
+                              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                              type="number"
+                              min={0}
+                              value={scores.s1}
+                              onChange={(e) =>
+                                setScoreByMatch((prev) => ({
+                                  ...prev,
+                                  [m.id]: { ...scores, s1: e.target.value },
+                                }))
+                              }
+                              disabled={isSavingResult || isDeleting}
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-sm font-medium text-gray-700">
+                              Score 2
+                            </span>
+                            <input
+                              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                              type="number"
+                              min={0}
+                              value={scores.s2}
+                              onChange={(e) =>
+                                setScoreByMatch((prev) => ({
+                                  ...prev,
+                                  [m.id]: { ...scores, s2: e.target.value },
+                                }))
+                              }
+                              disabled={isSavingResult || isDeleting}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                            disabled={isSavingResult || isDeleting}
+                            onClick={() => handleUpdateFinishedScore(m)}
+                          >
+                            {busyMatchId === m.id && busyAction === "score"
+                              ? "Saving..."
+                              : "Update score"}
+                          </button>
                         </div>
                       </div>
                     ) : (

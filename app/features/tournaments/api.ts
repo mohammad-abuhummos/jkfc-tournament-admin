@@ -830,8 +830,8 @@ export async function setTournamentMatchResult(input: {
         : input.team2Id;
 
   await updateDoc(doc(firestore, "tournaments", input.tournamentId, "matches", input.matchId), {
-    score1: input.score1,
-    score2: input.score2,
+    score1: Number(input.score1),
+    score2: Number(input.score2),
     status: "finished",
     finishedAt: serverTimestamp(),
     winnerTeamId,
