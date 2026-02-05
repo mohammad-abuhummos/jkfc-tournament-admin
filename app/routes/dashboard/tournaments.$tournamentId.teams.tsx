@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.teams";
+import { useAuth } from "~/auth/auth";
 import {
   createTournamentTeam,
   deleteTournamentTeam,
@@ -133,7 +134,11 @@ function Modal({
 }
 
 export default function TournamentTeams() {
+  const { user } = useAuth();
   const { tournamentId } = useTournamentManager();
+  const actor = user
+    ? { userId: user.uid, userEmail: user.email ?? null }
+    : undefined;
 
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -243,6 +248,7 @@ export default function TournamentTeams() {
           description: description.trim(),
           logoFile,
           previousLogoPath: editingTeam.logoPath ?? null,
+          actor,
         });
         setMessage("Team updated.");
       } else {
@@ -252,6 +258,7 @@ export default function TournamentTeams() {
           nameAr: nameAr.trim(),
           description: description.trim(),
           logoFile,
+          actor,
         });
         setMessage("Team created.");
       }
@@ -285,6 +292,7 @@ export default function TournamentTeams() {
         tournamentId,
         teamId: teamToDelete.id,
         logoPath: teamToDelete.logoPath ?? null,
+        actor,
       });
       setMessage("Team deleted.");
       setTeamToDelete(null);

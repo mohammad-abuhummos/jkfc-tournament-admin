@@ -2,6 +2,7 @@ import * as React from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.bracket";
 import { FullPageSpinner } from "~/components/FullPageSpinner";
+import { useAuth } from "~/auth/auth";
 import {
   saveTournamentBracketState,
   subscribeToTournamentBracketState,
@@ -18,7 +19,11 @@ export function meta({ }: Route.MetaArgs) {
 const BRACKET_SIZES = [4, 8, 16, 32] as const;
 
 export default function TournamentBracketAdmin() {
+  const { user } = useAuth();
   const { tournamentId } = useTournamentManager();
+  const actor = user
+    ? { userId: user.uid, userEmail: user.email ?? null }
+    : undefined;
 
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [bracket, setBracket] = React.useState<BracketState | null>(null);
@@ -88,7 +93,7 @@ export default function TournamentBracketAdmin() {
         teamIds: selectedTeamIds,
         size,
       });
-      await saveTournamentBracketState({ tournamentId, bracket: next });
+      await saveTournamentBracketState({ tournamentId, bracket: next, actor });
       setMessage("Bracket generated.");
     } catch (err) {
       console.error("[Bracket] generate/save failed", err);
@@ -112,7 +117,7 @@ export default function TournamentBracketAdmin() {
     setSaving(true);
     try {
       const next = setBracketMatchResult(bracket, input);
-      await saveTournamentBracketState({ tournamentId, bracket: next });
+      await saveTournamentBracketState({ tournamentId, bracket: next, actor });
       setMessage("Bracket updated.");
     } catch (err) {
       console.error("[Bracket] setBracketMatchResult failed", err);

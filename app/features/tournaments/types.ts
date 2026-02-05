@@ -51,7 +51,7 @@ export type GroupDoc = {
 
 export type Group = GroupDoc & { id: string };
 
-export type MatchStatus = "scheduled" | "finished";
+export type MatchStatus = "scheduled" | "in_progress" | "finished";
 
 export type TournamentMatchDoc = {
   groupId?: string | null;

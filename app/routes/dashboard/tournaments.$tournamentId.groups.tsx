@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.groups";
+import { useAuth } from "~/auth/auth";
 import {
   addTeamToGroup,
   createTournamentGroup,
@@ -87,7 +88,11 @@ function Modal({ open, title, description, onClose, children }: ModalProps) {
 }
 
 export default function TournamentGroups() {
+  const { user } = useAuth();
   const { tournamentId } = useTournamentManager();
+  const actor = user
+    ? { userId: user.uid, userEmail: user.email ?? null }
+    : undefined;
 
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [groups, setGroups] = React.useState<Group[]>([]);
@@ -216,6 +221,7 @@ export default function TournamentGroups() {
         tournamentId,
         name: groupName.trim(),
         order: Number(groupOrder) || 0,
+        actor,
       });
       setGroupName("");
       setGroupOrder((prev) => prev + 1);
@@ -244,6 +250,7 @@ export default function TournamentGroups() {
         groupId,
         name: editGroupName.trim(),
         order: Number(editGroupOrder) || 0,
+        actor,
       });
       setMessage("Group updated.");
       setEditGroupModalOpen(false);
@@ -268,7 +275,7 @@ export default function TournamentGroups() {
     setError(null);
     setMessage(null);
     try {
-      await deleteTournamentGroup({ tournamentId, groupId });
+      await deleteTournamentGroup({ tournamentId, groupId, actor });
       setMessage("Group deleted.");
 
       if (editingGroupId === groupId) {
@@ -298,7 +305,7 @@ export default function TournamentGroups() {
     setError(null);
     setMessage(null);
     try {
-      await addTeamToGroup({ tournamentId, groupId, teamId });
+      await addTeamToGroup({ tournamentId, groupId, teamId, actor });
       setSelectedTeamByGroup((prev) => ({ ...prev, [groupId]: "" }));
     } catch (err) {
       console.error("[Groups] addTeamToGroup failed", err);
@@ -313,7 +320,7 @@ export default function TournamentGroups() {
     setError(null);
     setMessage(null);
     try {
-      await removeTeamFromGroup({ tournamentId, groupId, teamId });
+      await removeTeamFromGroup({ tournamentId, groupId, teamId, actor });
     } catch (err) {
       console.error("[Groups] removeTeamFromGroup failed", err);
       setError("Failed to remove team from group.");
@@ -364,6 +371,7 @@ export default function TournamentGroups() {
         description: editDescription.trim(),
         logoFile: editLogoFile,
         previousLogoPath: existing?.logoPath ?? null,
+        actor,
       });
       setMessage("Team updated.");
       setEditTeamModalOpen(false);
@@ -392,7 +400,7 @@ export default function TournamentGroups() {
       const groupsContaining = groups.filter((g) => g.teamIds.includes(teamId));
       await Promise.all(
         groupsContaining.map((g) =>
-          removeTeamFromGroup({ tournamentId, groupId: g.id, teamId }).catch((err) => {
+          removeTeamFromGroup({ tournamentId, groupId: g.id, teamId, actor }).catch((err) => {
             console.warn("[Groups] removeTeamFromGroup (pre-delete) failed", err);
           }),
         ),
@@ -402,6 +410,7 @@ export default function TournamentGroups() {
         tournamentId,
         teamId,
         logoPath: t?.logoPath ?? null,
+        actor,
       });
       setMessage("Team deleted.");
 
@@ -434,6 +443,7 @@ export default function TournamentGroups() {
           team2Id: p.team2Id,
           scheduledAt: null,
         })),
+        actor,
       });
       setMessage(
         `Schedule generated for ${group.name}. (Don’t run twice or you’ll duplicate matches.)`,

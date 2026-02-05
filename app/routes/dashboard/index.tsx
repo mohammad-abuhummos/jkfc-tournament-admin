@@ -67,6 +67,7 @@ export default function DashboardIndex() {
     try {
       const id = await createTournament({
         userId: user.uid,
+        userEmail: user.email ?? null,
         nameEn: nameEn.trim(),
         nameAr: nameAr.trim(),
         description: description.trim(),

@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.matches";
+import { useAuth } from "~/auth/auth";
 import {
   createTournamentMatch,
   deleteTournamentMatch,
@@ -88,7 +89,11 @@ function toDateTimeLocalValue(date: Date): string {
 }
 
 export default function TournamentMatches() {
+  const { user } = useAuth();
   const { tournamentId } = useTournamentManager();
+  const actor = user
+    ? { userId: user.uid, userEmail: user.email ?? null }
+    : undefined;
 
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [groups, setGroups] = React.useState<Group[]>([]);
@@ -121,6 +126,39 @@ export default function TournamentMatches() {
     Record<string, { s1: string; s2: string }>
   >({});
   const [busyMatchId, setBusyMatchId] = React.useState<string | null>(null);
+  const [busyAction, setBusyAction] = React.useState<"score" | "finish" | null>(
+    null,
+  );
+
+  const startedMatchIdsRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    startedMatchIdsRef.current = new Set();
+  }, [tournamentId]);
+
+  // Auto-start matches when scheduled time is now or past
+  React.useEffect(() => {
+    const now = Date.now();
+    for (const m of matches) {
+      if (
+        m.status !== "scheduled" ||
+        !m.scheduledAt ||
+        m.scheduledAt.toDate().getTime() > now ||
+        startedMatchIdsRef.current.has(m.id)
+      )
+        continue;
+      startedMatchIdsRef.current.add(m.id);
+      void updateTournamentMatch({
+        tournamentId,
+        matchId: m.id,
+        groupId: m.groupId ?? null,
+        team1Id: m.team1Id,
+        team2Id: m.team2Id,
+        scheduledAt: m.scheduledAt.toDate(),
+        status: "in_progress",
+        actor,
+      });
+    }
+  }, [tournamentId, matches]);
 
   React.useEffect(() => {
     let unsubTeams: (() => void) | undefined;
@@ -239,6 +277,7 @@ export default function TournamentMatches() {
         team1Id,
         team2Id,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        actor,
       });
       setMessage("Match created.");
       setTeam1Id("");
@@ -267,6 +306,7 @@ export default function TournamentMatches() {
 
     setSavingEdit(true);
     try {
+      // Only update metadata; score is persisted only when user clicks "Finish match"
       await updateTournamentMatch({
         tournamentId,
         matchId: editingMatch.id,
@@ -275,8 +315,7 @@ export default function TournamentMatches() {
         team2Id: editTeam2Id,
         scheduledAt: editScheduledAt ? new Date(editScheduledAt) : null,
         status: editingMatch.status,
-        score1: editingMatch.score1 ?? null,
-        score2: editingMatch.score2 ?? null,
+        actor,
       });
       setMessage("Match updated.");
       setEditModalOpen(false);
@@ -300,13 +339,54 @@ export default function TournamentMatches() {
     setError(null);
     setMessage(null);
     try {
-      await deleteTournamentMatch({ tournamentId, matchId: match.id });
+      await deleteTournamentMatch({
+        tournamentId,
+        matchId: match.id,
+        actor,
+      });
       setMessage("Match deleted.");
     } catch (err) {
       console.error("[Matches] deleteTournamentMatch failed", err);
       setError("Failed to delete match.");
     } finally {
       setDeletingMatchId(null);
+    }
+  }
+
+  async function handleSetScore(match: TournamentMatch) {
+    const score = scoreByMatch[match.id] ?? { s1: "", s2: "" };
+    const s1 = Number(score.s1);
+    const s2 = Number(score.s2);
+
+    if (!Number.isFinite(s1) || !Number.isFinite(s2)) {
+      setError("Please enter valid scores.");
+      return;
+    }
+
+    setBusyMatchId(match.id);
+    setBusyAction("score");
+    setError(null);
+    setMessage(null);
+    try {
+      await updateTournamentMatch({
+        tournamentId,
+        matchId: match.id,
+        groupId: match.groupId ?? null,
+        team1Id: match.team1Id,
+        team2Id: match.team2Id,
+        scheduledAt: match.scheduledAt?.toDate() ?? null,
+        status: match.status,
+        score1: s1,
+        score2: s2,
+        actor,
+      });
+      setMessage("Score saved. Match is still in progress.");
+    } catch (err) {
+      console.error("[Matches] updateTournamentMatch (score) failed", err);
+      setError("Failed to save score.");
+    } finally {
+      setBusyMatchId(null);
+      setBusyAction(null);
     }
   }
 
@@ -321,6 +401,7 @@ export default function TournamentMatches() {
     }
 
     setBusyMatchId(match.id);
+    setBusyAction("finish");
     setError(null);
     setMessage(null);
     try {
@@ -331,13 +412,15 @@ export default function TournamentMatches() {
         team2Id: match.team2Id,
         score1: s1,
         score2: s2,
+        actor,
       });
-      setMessage("Result saved.");
+      setMessage("Match finished.");
     } catch (err) {
       console.error("[Matches] setTournamentMatchResult failed", err);
-      setError("Failed to save result.");
+      setError("Failed to finish match.");
     } finally {
       setBusyMatchId(null);
+      setBusyAction(null);
     }
   }
 
@@ -398,10 +481,17 @@ export default function TournamentMatches() {
               const isDeleting = deletingMatchId === m.id;
               const isSavingResult = busyMatchId === m.id;
               const disableActions = isDeleting || isSavingResult;
+              const isLive =
+                m.status === "in_progress" ||
+                (m.status === "scheduled" &&
+                  m.scheduledAt &&
+                  m.scheduledAt.toDate().getTime() <= Date.now());
               const statusPillClass =
                 m.status === "finished"
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-amber-200 bg-amber-50 text-amber-700";
+                  : isLive
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700";
 
               return (
                 <div
@@ -434,7 +524,11 @@ export default function TournamentMatches() {
                       <span
                         className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusPillClass}`}
                       >
-                        {m.status === "finished" ? "Finished" : "Scheduled"}
+                        {m.status === "finished"
+                          ? "Finished"
+                          : isLive
+                            ? "Live"
+                            : "Scheduled"}
                       </span>
                       <button
                         type="button"
@@ -514,14 +608,26 @@ export default function TournamentMatches() {
                           />
                         </label>
 
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
+                            disabled={isSavingResult || isDeleting}
+                            onClick={() => handleSetScore(m)}
+                          >
+                            {busyMatchId === m.id && busyAction === "score"
+                              ? "Saving..."
+                              : "Set score"}
+                          </button>
                           <button
                             type="button"
                             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
                             disabled={isSavingResult || isDeleting}
                             onClick={() => handleSetResult(m)}
                           >
-                            {isSavingResult ? "Saving..." : "Set result"}
+                            {busyMatchId === m.id && busyAction === "finish"
+                              ? "Finishing..."
+                              : "Finish match"}
                           </button>
                         </div>
                       </div>

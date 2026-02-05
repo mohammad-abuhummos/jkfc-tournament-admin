@@ -2,6 +2,7 @@ import * as React from "react";
 import { useCallback, useEffect, useState, useRef } from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.event";
+import { useAuth } from "~/auth/auth";
 import {
   createTournamentMatch,
   deleteTournamentMatch,
@@ -681,7 +682,11 @@ function BracketTree({ bracket, teams, groups, onMatchContext, onWinnerContext, 
 // ============================================
 
 export default function TournamentEvent() {
+  const { user } = useAuth();
   const { tournamentId, tournament } = useTournamentManager();
+  const actor = user
+    ? { userId: user.uid, userEmail: user.email ?? null }
+    : undefined;
 
   // Data state
   const [teams, setTeams] = useState<Team[]>([]);
@@ -811,14 +816,14 @@ export default function TournamentEvent() {
     async (newBracket: EventBracketState) => {
       setSaving(true);
       try {
-        await saveEventBracketState({ tournamentId, bracket: newBracket });
+        await saveEventBracketState({ tournamentId, bracket: newBracket, actor });
       } catch (err) {
         console.error("[Event] Failed to save bracket", err);
       } finally {
         setSaving(false);
       }
     },
-    [tournamentId]
+    [tournamentId, actor]
   );
 
   // Context menu handlers
@@ -1056,6 +1061,7 @@ export default function TournamentEvent() {
         team1Id: matchForm.team1Id,
         team2Id: matchForm.team2Id,
         scheduledAt,
+        actor,
       });
       setCreateMatchModal(null);
     } catch (err) {
@@ -1090,6 +1096,7 @@ export default function TournamentEvent() {
         team1Id: matchForm.team1Id,
         team2Id: matchForm.team2Id,
         scheduledAt,
+        actor,
       });
 
       // If scores are provided, set the result
@@ -1103,6 +1110,7 @@ export default function TournamentEvent() {
           team2Id: matchForm.team2Id,
           score1: s1,
           score2: s2,
+          actor,
         });
       }
 
@@ -1113,18 +1121,18 @@ export default function TournamentEvent() {
     } finally {
       setMatchSaving(false);
     }
-  }, [editMatchModal, matchForm, tournamentId]);
+  }, [editMatchModal, matchForm, tournamentId, actor]);
 
   const handleDeleteMatch = useCallback(async (matchId: string) => {
     if (!confirm("Are you sure you want to delete this match?")) return;
 
     try {
-      await deleteTournamentMatch({ tournamentId, matchId });
+      await deleteTournamentMatch({ tournamentId, matchId, actor });
     } catch (err) {
       console.error("[Event] Failed to delete match", err);
       alert("Failed to delete match.");
     }
-  }, [tournamentId]);
+  }, [tournamentId, actor]);
 
   // Get matches for a specific group
   const getMatchesForGroup = useCallback(

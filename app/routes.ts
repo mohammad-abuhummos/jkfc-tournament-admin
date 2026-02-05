@@ -13,6 +13,7 @@ export default [
       route("matches", "routes/dashboard/tournaments.$tournamentId.matches.tsx"),
       route("bracket", "routes/dashboard/tournaments.$tournamentId.bracket.tsx"),
       route("event", "routes/dashboard/tournaments.$tournamentId.event.tsx"),
+      route("log", "routes/dashboard/tournaments.$tournamentId.log.tsx"),
       route("settings", "routes/dashboard/tournaments.$tournamentId.settings.tsx"),
     ]),
   ]),

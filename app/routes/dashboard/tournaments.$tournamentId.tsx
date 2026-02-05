@@ -117,6 +117,7 @@ function TournamentLayoutInner({ tournamentId }: { tournamentId: string }) {
           <MenuLink to={`${base}/matches`} label="Matches" />
           <MenuLink to={`${base}/bracket`} label="Bracket" />
           <MenuLink to={`${base}/event`} label="Event" />
+          <MenuLink to={`${base}/log`} label="Log" />
           <MenuLink to={`${base}/settings`} label="Settings" />
         </nav>
 

@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { Route } from "./+types/tournaments.$tournamentId.settings";
+import { useAuth } from "~/auth/auth";
 import {
   updateTournament,
   updateTournamentAboutUs,
@@ -17,7 +18,11 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function TournamentSettings() {
+  const { user } = useAuth();
   const { tournamentId, tournament } = useTournamentManager();
+  const actor = user
+    ? { userId: user.uid, userEmail: user.email ?? null }
+    : undefined;
 
   const [nameEn, setNameEn] = React.useState(tournament.nameEn);
   const [nameAr, setNameAr] = React.useState(tournament.nameAr);
@@ -102,6 +107,7 @@ export default function TournamentSettings() {
         youtubeUrl: trimmedYoutubeUrl,
         youtubeActive,
         status,
+        actor,
       });
 
       if (logoFile) {
@@ -109,6 +115,7 @@ export default function TournamentSettings() {
           tournamentId,
           file: logoFile,
           previousPath: tournament.logoPath ?? null,
+          actor,
         });
         setLogoFile(null);
       }
@@ -136,7 +143,7 @@ export default function TournamentSettings() {
         ...(aboutUsLogoUrl.trim() && { logoUrl: aboutUsLogoUrl.trim() }),
         ...(aboutUsLogoAlt.trim() && { logoAlt: aboutUsLogoAlt.trim() }),
       };
-      await updateTournamentAboutUs({ tournamentId, aboutUs });
+      await updateTournamentAboutUs({ tournamentId, aboutUs, actor });
       setAboutUsMessage(
         paragraphs.length
           ? "About Us saved."
